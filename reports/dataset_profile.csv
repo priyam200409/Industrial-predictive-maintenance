@@ -1,0 +1,4 @@
+dataset,rows,columns,missing_values,duplicate_rows
+train,20631,26,0,0
+test,13096,26,0,0
+rul,100,1,0,29
