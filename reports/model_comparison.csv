@@ -1,0 +1,2 @@
+baseline_model,candidate_model,baseline_MAE,XGBoost_MAE,MAE_improvement,MAE_improvement_pct,baseline_RMSE,XGBoost_RMSE,RMSE_improvement,RMSE_improvement_pct,validation_samples
+RandomForestBaseline,XGBoost,24.71715738285809,22.89229202270508,1.8248653601530087,7.382990413851531,34.81298862070269,32.24420445139134,2.56878416931135,7.378809665837588,4070
