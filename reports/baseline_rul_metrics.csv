@@ -1,0 +1,2 @@
+model,MAE,RMSE,samples
+RandomForestBaseline,24.71715738285809,34.81298862070269,4070

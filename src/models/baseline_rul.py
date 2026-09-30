@@ -1,0 +1,381 @@
+from pathlib import Path
+
+import joblib
+import numpy as np
+import pandas as pd
+from sklearn.metrics import mean_absolute_error, mean_squared_error
+from sklearn.impute import SimpleImputer
+from sklearn.pipeline import Pipeline
+from sklearn.ensemble import RandomForestRegressor
+
+
+# ============================================================
+# PROJECT PATHS
+# ============================================================
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+
+PROCESSED_DIR = PROJECT_ROOT / "data" / "processed"
+REPORTS_DIR = PROJECT_ROOT / "reports"
+MODELS_DIR = PROJECT_ROOT / "models"
+
+FEATURE_PATH = PROCESSED_DIR / "train_features.csv"
+SPLIT_PATH = REPORTS_DIR / "train_validation_split.csv"
+
+MODEL_PATH = MODELS_DIR / "baseline_rul_model.joblib"
+METRICS_PATH = REPORTS_DIR / "baseline_rul_metrics.csv"
+
+
+# ============================================================
+# CONFIGURATION
+# ============================================================
+
+TARGET_COLUMN = "RUL"
+
+# Identifiers should not be used as predictive features.
+EXCLUDED_COLUMNS = {
+    "unit_id",
+    "cycle",
+    TARGET_COLUMN,
+}
+
+RANDOM_STATE = 42
+
+
+# ============================================================
+# LOAD DATA
+# ============================================================
+
+def load_data() -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Load engineered features and engine split metadata."""
+
+    if not FEATURE_PATH.exists():
+        raise FileNotFoundError(
+            f"Feature dataset not found: {FEATURE_PATH}"
+        )
+
+    if not SPLIT_PATH.exists():
+        raise FileNotFoundError(
+            f"Split metadata not found: {SPLIT_PATH}"
+        )
+
+    data = pd.read_csv(FEATURE_PATH)
+    split_metadata = pd.read_csv(SPLIT_PATH)
+
+    return data, split_metadata
+
+
+# ============================================================
+# CREATE TRAIN / VALIDATION DATA
+# ============================================================
+
+def create_split(
+    data: pd.DataFrame,
+    split_metadata: pd.DataFrame,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Recreate the engine-level train/validation split."""
+
+    train_engines = set(
+        split_metadata.loc[
+            split_metadata["split"] == "train",
+            "unit_id",
+        ]
+    )
+
+    validation_engines = set(
+        split_metadata.loc[
+            split_metadata["split"] == "validation",
+            "unit_id",
+        ]
+    )
+
+    train = data[
+        data["unit_id"].isin(train_engines)
+    ].copy()
+
+    validation = data[
+        data["unit_id"].isin(validation_engines)
+    ].copy()
+
+    return train, validation
+
+
+# ============================================================
+# PREPARE FEATURES
+# ============================================================
+
+def prepare_features(
+    train: pd.DataFrame,
+    validation: pd.DataFrame,
+) -> tuple[
+    pd.DataFrame,
+    pd.Series,
+    pd.DataFrame,
+    pd.Series,
+]:
+    """Prepare model features and target."""
+
+    feature_columns = [
+        column
+        for column in train.columns
+        if column not in EXCLUDED_COLUMNS
+    ]
+
+    X_train = train[feature_columns].copy()
+    y_train = train[TARGET_COLUMN].copy()
+
+    X_validation = validation[feature_columns].copy()
+    y_validation = validation[TARGET_COLUMN].copy()
+
+    return (
+        X_train,
+        y_train,
+        X_validation,
+        y_validation,
+    )
+
+
+# ============================================================
+# BUILD BASELINE MODEL
+# ============================================================
+
+def build_model() -> Pipeline:
+    """
+    Build a simple Random Forest baseline.
+
+    The baseline establishes a non-gradient-boosting benchmark
+    before the XGBoost model is introduced.
+    """
+
+    model = Pipeline(
+        steps=[
+            (
+                "imputer",
+                SimpleImputer(strategy="median"),
+            ),
+            (
+                "regressor",
+                RandomForestRegressor(
+                    n_estimators=100,
+                    max_depth=12,
+                    min_samples_leaf=2,
+                    random_state=RANDOM_STATE,
+                    n_jobs=-1,
+                ),
+            ),
+        ]
+    )
+
+    return model
+
+
+# ============================================================
+# EVALUATION
+# ============================================================
+
+def calculate_metrics(
+    y_true: pd.Series,
+    predictions: np.ndarray,
+) -> dict:
+    """Calculate baseline regression metrics."""
+
+    mae = mean_absolute_error(
+        y_true,
+        predictions,
+    )
+
+    rmse = np.sqrt(
+        mean_squared_error(
+            y_true,
+            predictions,
+        )
+    )
+
+    return {
+        "model": "RandomForestBaseline",
+        "MAE": mae,
+        "RMSE": rmse,
+        "samples": len(y_true),
+    }
+
+
+# ============================================================
+# SAVE METRICS
+# ============================================================
+
+def save_metrics(metrics: dict) -> None:
+    """Save baseline metrics to CSV."""
+
+    REPORTS_DIR.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+
+    metrics_df = pd.DataFrame(
+        [metrics]
+    )
+
+    metrics_df.to_csv(
+        METRICS_PATH,
+        index=False,
+    )
+
+
+# ============================================================
+# MAIN
+# ============================================================
+
+def main():
+    """Train and evaluate the baseline RUL model."""
+
+    print("\nRUL BASELINE MODEL")
+    print("=" * 70)
+
+    # --------------------------------------------------------
+    # Load data
+    # --------------------------------------------------------
+
+    data, split_metadata = load_data()
+
+    print(
+        f"Feature rows       : {len(data)}"
+    )
+
+    print(
+        f"Feature columns    : {len(data.columns)}"
+    )
+
+    # --------------------------------------------------------
+    # Recreate engine split
+    # --------------------------------------------------------
+
+    train, validation = create_split(
+        data,
+        split_metadata,
+    )
+
+    print(
+        f"Training engines   : "
+        f"{train['unit_id'].nunique()}"
+    )
+
+    print(
+        f"Validation engines : "
+        f"{validation['unit_id'].nunique()}"
+    )
+
+    print(
+        f"Training rows      : {len(train)}"
+    )
+
+    print(
+        f"Validation rows    : {len(validation)}"
+    )
+
+    # --------------------------------------------------------
+    # Prepare features
+    # --------------------------------------------------------
+
+    (
+        X_train,
+        y_train,
+        X_validation,
+        y_validation,
+    ) = prepare_features(
+        train,
+        validation,
+    )
+
+    print(
+        f"\nModel features     : {X_train.shape[1]}"
+    )
+
+    print(
+        f"Excluded columns   : "
+        f"{sorted(EXCLUDED_COLUMNS)}"
+    )
+
+    # --------------------------------------------------------
+    # Build model
+    # --------------------------------------------------------
+
+    model = build_model()
+
+    # --------------------------------------------------------
+    # Train
+    # --------------------------------------------------------
+
+    print("\nTraining baseline model...")
+
+    model.fit(
+        X_train,
+        y_train,
+    )
+
+    print("Training complete.")
+
+    # --------------------------------------------------------
+    # Predict
+    # --------------------------------------------------------
+
+    predictions = model.predict(
+        X_validation
+    )
+
+    # --------------------------------------------------------
+    # Evaluate
+    # --------------------------------------------------------
+
+    metrics = calculate_metrics(
+        y_validation,
+        predictions,
+    )
+
+    print("\nBASELINE RESULTS")
+    print("-" * 70)
+
+    print(
+        f"MAE  : {metrics['MAE']:.4f}"
+    )
+
+    print(
+        f"RMSE : {metrics['RMSE']:.4f}"
+    )
+
+    print(
+        f"Samples: {metrics['samples']}"
+    )
+
+    # --------------------------------------------------------
+    # Save model
+    # --------------------------------------------------------
+
+    MODELS_DIR.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+
+    joblib.dump(
+        model,
+        MODEL_PATH,
+    )
+
+    # --------------------------------------------------------
+    # Save metrics
+    # --------------------------------------------------------
+
+    save_metrics(
+        metrics
+    )
+
+    print(
+        f"\nSaved model:\n{MODEL_PATH}"
+    )
+
+    print(
+        f"\nSaved metrics:\n{METRICS_PATH}"
+    )
+
+
+if __name__ == "__main__":
+    main()
