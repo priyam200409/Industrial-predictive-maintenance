@@ -1,0 +1,13 @@
+metric,value
+model,XGBoost
+validation_engines,20
+validation_rows,4070
+model_features,138
+MAE,22.8923
+RMSE,32.2442
+top_xgb_feature,sensor_4_rolling_mean_5
+top_permutation_feature,sensor_4_rolling_mean_5
+rolling_mean_importance_percentage,82.806810
+rolling_std_importance_percentage,11.385470
+original_sensor_importance_percentage,3.669549
+delta_importance_percentage,2.033876
