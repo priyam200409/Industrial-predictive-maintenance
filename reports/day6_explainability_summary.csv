@@ -1,0 +1,17 @@
+metric,value
+model,XGBoost
+validation_rows,4070
+model_features,138
+engine_explanations,557
+explained_engines,3
+mean_absolute_error,22.892291365545564
+mean_prediction_error,0.3286214920973602
+mean_absolute_shap_contribution,144.91663559024087
+over_prediction_rows,2098
+under_prediction_rows,1972
+top_global_shap_feature,sensor_4_rolling_mean_5
+top_global_shap_mean_abs_value,9.152038288529116
+second_global_shap_feature,sensor_11_rolling_mean_5
+third_global_shap_feature,sensor_14_rolling_mean_20
+error_absolute_shap_correlation,0.1057550334826515
+error_positive_shap_correlation,0.0348354026123738
