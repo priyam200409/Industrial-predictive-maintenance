@@ -1,0 +1,12 @@
+metric,value
+validation_rows,4070.0
+mean_absolute_error,22.892291365545564
+mean_prediction_error,0.3286214920973602
+mean_absolute_shap_contribution,144.91663559024087
+mean_positive_shap_contribution,71.1458437563939
+mean_negative_shap_contribution,-73.77079183384696
+over_prediction_rows,2098.0
+under_prediction_rows,1972.0
+exact_prediction_rows,0.0
+error_abs_shap_correlation,0.10575503348265153
+error_positive_shap_correlation,0.03483540261237383
