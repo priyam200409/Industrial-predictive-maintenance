@@ -1,0 +1,14 @@
+metric,value
+lifecycle_ranges,7.0
+validation_engines,20.0
+validation_observations,4070.0
+overall_mae,22.892291365545564
+overall_max_absolute_error,143.6100845336914
+critical_observations,354.0
+warning_observations,582.0
+normal_observations,3134.0
+critical_engines,0.0
+warning_engines,0.0
+normal_engines,20.0
+max_maintenance_priority_score,16.74074074074074
+min_maintenance_priority_score,6.6796875
