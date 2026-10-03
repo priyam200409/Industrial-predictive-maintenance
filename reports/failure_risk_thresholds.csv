@@ -1,0 +1,4 @@
+risk_level,min_rul,max_rul,description
+Critical,0,20.0,Very low remaining useful life; requires highest maintenance attention.
+Warning,21,50.0,Reduced remaining useful life; maintenance planning should be prioritized.
+Normal,51,,Remaining useful life above the project warning threshold.
