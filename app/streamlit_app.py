@@ -9,6 +9,7 @@ import pandas as pd
 import streamlit as st
 
 from src.features.inference_features import build_inference_features
+from src.models.live_shap import explain_prediction
 
 
 REPORTS = ROOT / "reports"
@@ -23,41 +24,44 @@ st.set_page_config(
 )
 
 
-st.markdown("""
-<style>
-.block-container {
-    padding-top: 2rem;
-    max-width: 1400px;
-}
+st.markdown(
+    """
+    <style>
+    .block-container {
+        padding-top: 2rem;
+        max-width: 1400px;
+    }
 
-[data-testid="stMetric"] {
-    background: rgba(255,255,255,0.04);
-    padding: 18px;
-    border-radius: 12px;
-}
+    [data-testid="stMetric"] {
+        background: rgba(255,255,255,0.04);
+        padding: 18px;
+        border-radius: 12px;
+    }
 
-.risk-critical {
-    padding: 18px;
-    border-radius: 12px;
-    background: rgba(220, 38, 38, 0.15);
-    border-left: 5px solid #dc2626;
-}
+    .risk-critical {
+        padding: 18px;
+        border-radius: 12px;
+        background: rgba(220, 38, 38, 0.15);
+        border-left: 5px solid #dc2626;
+    }
 
-.risk-warning {
-    padding: 18px;
-    border-radius: 12px;
-    background: rgba(234, 179, 8, 0.15);
-    border-left: 5px solid #eab308;
-}
+    .risk-warning {
+        padding: 18px;
+        border-radius: 12px;
+        background: rgba(234, 179, 8, 0.15);
+        border-left: 5px solid #eab308;
+    }
 
-.risk-normal {
-    padding: 18px;
-    border-radius: 12px;
-    background: rgba(34, 197, 94, 0.15);
-    border-left: 5px solid #22c55e;
-}
-</style>
-""", unsafe_allow_html=True)
+    .risk-normal {
+        padding: 18px;
+        border-radius: 12px;
+        background: rgba(34, 197, 94, 0.15);
+        border-left: 5px solid #22c55e;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
 
 
 @st.cache_data
@@ -93,6 +97,7 @@ def load_model():
 predictions, risk, priority, metrics, shap = load_data()
 model = load_model()
 
+
 mae = metrics.loc[0, "MAE"]
 rmse = metrics.loc[0, "RMSE"]
 
@@ -110,6 +115,10 @@ pages = {
     "🧠 Model Intelligence": "model",
 }
 
+
+# ============================================================
+# SIDEBAR
+# ============================================================
 
 st.sidebar.title("⚙️ Predictive Maintenance")
 st.sidebar.caption("Machine Health & RUL Intelligence")
@@ -131,6 +140,7 @@ st.sidebar.caption("XGBoost RUL Model")
 if pages[page] == "overview":
 
     st.title("Industrial Predictive Maintenance")
+
     st.caption(
         "Predict machine degradation before unexpected downtime."
     )
@@ -149,6 +159,7 @@ if pages[page] == "overview":
     left, right = st.columns(2)
 
     with left:
+
         st.subheader("Maintenance Risk")
 
         risk_counts = pd.Series({
@@ -160,6 +171,7 @@ if pages[page] == "overview":
         st.bar_chart(risk_counts)
 
     with right:
+
         st.subheader("Model Performance")
 
         st.metric(
@@ -234,7 +246,7 @@ elif pages[page] == "predict":
     )
 
     # --------------------------------------------------------
-    # DEMO
+    # DEMO MACHINE
     # --------------------------------------------------------
 
     if option == "Try Demo Machine":
@@ -263,12 +275,13 @@ elif pages[page] == "predict":
                 priority["unit_id"] == engine
             ].iloc[0]
 
-            rul = row["latest_predicted_RUL"]
-            score = row["maintenance_priority_score"]
+            rul = float(row["latest_predicted_RUL"])
+            score = float(row["maintenance_priority_score"])
 
-            if row["critical_rate"] > 0.10:
+            # Latest RUL is the primary risk decision.
+            if rul <= 20:
                 status = "Critical"
-            elif row["warning_rate"] > 0.10:
+            elif rul <= 50:
                 status = "Warning"
             else:
                 status = "Normal"
@@ -279,7 +292,11 @@ elif pages[page] == "predict":
 
             c1.metric(
                 "Predicted RUL",
-                f"{rul:.1f} cycles"
+                (
+                    "< 1 cycle"
+                    if rul < 1
+                    else f"{rul:.1f} cycles"
+                )
             )
 
             c2.metric(
@@ -295,30 +312,36 @@ elif pages[page] == "predict":
             if status == "Critical":
 
                 st.markdown(
-                    '<div class="risk-critical">'
-                    '<b>🔴 CRITICAL</b><br>'
-                    'Prioritize this engine for maintenance inspection.'
-                    '</div>',
+                    """
+                    <div class="risk-critical">
+                    <b>🔴 CRITICAL</b><br>
+                    Prioritize this engine for maintenance inspection.
+                    </div>
+                    """,
                     unsafe_allow_html=True,
                 )
 
             elif status == "Warning":
 
                 st.markdown(
-                    '<div class="risk-warning">'
-                    '<b>🟡 WARNING</b><br>'
-                    'Increase monitoring and plan maintenance.'
-                    '</div>',
+                    """
+                    <div class="risk-warning">
+                    <b>🟡 WARNING</b><br>
+                    Increase monitoring and plan maintenance.
+                    </div>
+                    """,
                     unsafe_allow_html=True,
                 )
 
             else:
 
                 st.markdown(
-                    '<div class="risk-normal">'
-                    '<b>🟢 NORMAL</b><br>'
-                    'No immediate maintenance priority detected.'
-                    '</div>',
+                    """
+                    <div class="risk-normal">
+                    <b>🟢 NORMAL</b><br>
+                    No immediate maintenance priority detected.
+                    </div>
+                    """,
                     unsafe_allow_html=True,
                 )
 
@@ -389,110 +412,312 @@ elif pages[page] == "predict":
                         "Generating features and running XGBoost..."
                     ):
 
-                        features = build_inference_features(
-                            data
-                        )
+                        try:
 
-                        latest = (
-                            features
-                            .groupby("unit_id")
-                            .tail(1)
-                            .copy()
-                        )
+                            features = build_inference_features(
+                                data
+                            )
 
-                        X = latest.drop(
-                            columns=[
+                            live_results = []
+                            shap_results = []
+
+                            for unit_id, group in features.groupby(
                                 "unit_id",
-                                "cycle"
-                            ]
-                        )
+                                sort=True
+                            ):
 
-                        predicted_rul = model.predict(X)
+                                group = group.copy()
 
-                        results = latest[
-                            [
-                                "unit_id",
-                                "cycle"
-                            ]
-                        ].copy()
+                                X = group.drop(
+                                    columns=[
+                                        "unit_id",
+                                        "cycle"
+                                    ]
+                                )
 
-                        results["predicted_RUL"] = predicted_rul
+                                group["predicted_RUL"] = (
+                                    model.predict(X)
+                                )
 
-                    st.success(
-                        "Prediction completed successfully."
-                    )
+                                # Latest machine observation
+                                latest_index = group[
+                                    "cycle"
+                                ].idxmax()
 
-                    st.divider()
+                                latest = group.loc[
+                                    latest_index
+                                ]
 
-                    st.subheader("Prediction Result")
+                                latest_X = X.loc[
+                                    [latest_index]
+                                ]
 
-                    for _, row in results.iterrows():
+                                rul = float(
+                                    latest["predicted_RUL"]
+                                )
 
-                        rul = row["predicted_RUL"]
+                                critical_rate = (
+                                    group["predicted_RUL"]
+                                    .le(20)
+                                    .mean()
+                                )
 
-                        if rul <= 20:
-                            status = "Critical"
-                        elif rul <= 50:
-                            status = "Warning"
-                        else:
-                            status = "Normal"
+                                warning_rate = (
+                                    group["predicted_RUL"]
+                                    .between(21, 50)
+                                    .mean()
+                                )
 
-                        c1, c2, c3 = st.columns(3)
+                                # Existing project priority formula
+                                priority_score = (
+                                    critical_rate * 70
+                                    + warning_rate * 30
+                                )
 
-                        c1.metric(
-                            "Machine",
-                            int(row["unit_id"])
-                        )
+                                # IMPORTANT:
+                                # Latest RUL determines current risk.
+                                if rul <= 20:
+                                    priority_band = "Critical"
+                                elif rul <= 50:
+                                    priority_band = "Warning"
+                                else:
+                                    priority_band = "Normal"
 
-                        c2.metric(
-                            "Current Cycle",
-                            int(row["cycle"])
-                        )
+                                live_results.append({
+                                    "unit_id": int(unit_id),
+                                    "latest_cycle": int(
+                                        latest["cycle"]
+                                    ),
+                                    "predicted_RUL": rul,
+                                    "critical_rate": critical_rate,
+                                    "warning_rate": warning_rate,
+                                    "maintenance_priority_score":
+                                        priority_score,
+                                    "priority_band":
+                                        priority_band,
+                                })
 
-                        c3.metric(
-                            "Predicted RUL",
-                            f"{rul:.2f} cycles"
-                        )
+                                # ------------------------------------------------
+                                # LIVE SHAP EXPLANATION
+                                # ------------------------------------------------
 
-                        if status == "Critical":
+                                shap_result = explain_prediction(
+                                    model,
+                                    latest_X,
+                                    top_n=5
+                                )
 
-                            st.markdown(
-                                '<div class="risk-critical">'
-                                '<b>🔴 CRITICAL</b><br>'
-                                'Prioritize this machine for maintenance inspection.'
-                                '</div>',
-                                unsafe_allow_html=True,
+                                shap_result.insert(
+                                    0,
+                                    "unit_id",
+                                    int(unit_id)
+                                )
+
+                                shap_results.append(
+                                    shap_result
+                                )
+
+                            results = pd.DataFrame(
+                                live_results
                             )
 
-                        elif status == "Warning":
-
-                            st.markdown(
-                                '<div class="risk-warning">'
-                                '<b>🟡 WARNING</b><br>'
-                                'Increase monitoring and plan maintenance.'
-                                '</div>',
-                                unsafe_allow_html=True,
+                            st.success(
+                                "Prediction completed successfully."
                             )
 
-                        else:
+                            st.divider()
 
-                            st.markdown(
-                                '<div class="risk-normal">'
-                                '<b>🟢 NORMAL</b><br>'
-                                'No immediate maintenance priority detected.'
-                                '</div>',
-                                unsafe_allow_html=True,
+                            # ------------------------------------------------
+                            # LIVE MAINTENANCE ANALYSIS
+                            # ------------------------------------------------
+
+                            st.subheader(
+                                "Live Maintenance Analysis"
                             )
 
-                    st.divider()
+                            for _, row in results.iterrows():
 
-                    st.subheader("Live Predictions")
+                                rul = float(
+                                    row["predicted_RUL"]
+                                )
 
-                    st.dataframe(
-                        results,
-                        width="stretch",
-                        hide_index=True
-                    )
+                                status = row[
+                                    "priority_band"
+                                ]
+
+                                score = float(
+                                    row[
+                                        "maintenance_priority_score"
+                                    ]
+                                )
+
+                                c1, c2, c3, c4 = st.columns(4)
+
+                                c1.metric(
+                                    "Machine",
+                                    int(row["unit_id"])
+                                )
+
+                                c2.metric(
+                                    "Current Cycle",
+                                    int(row["latest_cycle"])
+                                )
+
+                                c3.metric(
+                                    "Predicted RUL",
+                                    (
+                                        "< 1 cycle"
+                                        if rul < 1
+                                        else f"{rul:.1f} cycles"
+                                    )
+                                )
+
+                                c4.metric(
+                                    "Priority Score",
+                                    f"{score:.1f}"
+                                )
+
+                                if status == "Critical":
+
+                                    st.markdown(
+                                        """
+                                        <div class="risk-critical">
+                                        <b>🔴 CRITICAL</b><br>
+                                        Immediate maintenance inspection is recommended.
+                                        </div>
+                                        """,
+                                        unsafe_allow_html=True,
+                                    )
+
+                                elif status == "Warning":
+
+                                    st.markdown(
+                                        """
+                                        <div class="risk-warning">
+                                        <b>🟡 WARNING</b><br>
+                                        Increase monitoring and plan maintenance.
+                                        </div>
+                                        """,
+                                        unsafe_allow_html=True,
+                                    )
+
+                                else:
+
+                                    st.markdown(
+                                        """
+                                        <div class="risk-normal">
+                                        <b>🟢 NORMAL</b><br>
+                                        No immediate maintenance priority detected.
+                                        </div>
+                                        """,
+                                        unsafe_allow_html=True,
+                                    )
+
+                            st.divider()
+
+                            # ------------------------------------------------
+                            # MAINTENANCE RECOMMENDATION
+                            # ------------------------------------------------
+
+                            st.subheader(
+                                "Maintenance Recommendation"
+                            )
+
+                            if (
+                                results["priority_band"]
+                                == "Critical"
+                            ).any():
+
+                                st.error(
+                                    "Prioritize this machine for "
+                                    "immediate maintenance inspection."
+                                )
+
+                            elif (
+                                results["priority_band"]
+                                == "Warning"
+                            ).any():
+
+                                st.warning(
+                                    "Increase monitoring and schedule "
+                                    "preventive maintenance."
+                                )
+
+                            else:
+
+                                st.success(
+                                    "Machine is currently within the "
+                                    "normal project-defined risk range."
+                                )
+
+                            st.divider()
+
+                            # ------------------------------------------------
+                            # LIVE RESULTS
+                            # ------------------------------------------------
+
+                            st.subheader(
+                                "Live Prediction Results"
+                            )
+
+                            st.dataframe(
+                                results,
+                                width="stretch",
+                                hide_index=True
+                            )
+
+                            # ------------------------------------------------
+                            # SHAP EXPLANATION
+                            # ------------------------------------------------
+
+                            st.divider()
+
+                            st.subheader(
+                                "🧠 Why Is This Machine at Risk?"
+                            )
+
+                            if shap_results:
+
+                                shap_display = shap_results[0].copy()
+
+                                shap_display["direction"] = (
+                                    shap_display["shap_value"].apply(
+                                        lambda value:
+                                        "Lowers RUL"
+                                        if value < 0
+                                        else "Increases RUL"
+                                    )
+                                )
+
+                                shap_display["shap_value"] = (
+                                    shap_display[
+                                        "shap_value"
+                                    ].round(4)
+                                )
+
+                                st.dataframe(
+                                    shap_display[
+                                        [
+                                            "feature",
+                                            "shap_value",
+                                            "direction",
+                                        ]
+                                    ],
+                                    width="stretch",
+                                    hide_index=True
+                                )
+
+                                st.caption(
+                                    "Negative SHAP values push the "
+                                    "predicted RUL lower, while positive "
+                                    "values push it higher."
+                                )
+
+                        except Exception as e:
+
+                            st.error(
+                                f"Prediction failed: {e}"
+                            )
 
 
 # ============================================================

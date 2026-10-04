@@ -43,6 +43,7 @@ models/*.pickle
 models/*.pt
 models/*.pth
 models/*.onnx
+!models/xgboost_rul_model.joblib
 
 # ==============================
 # Generated Reports
