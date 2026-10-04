@@ -12,6 +12,31 @@ https://industrial-predictive-maintenance-m.streamlit.app/
 **GitHub Repository:**  
 https://github.com/priyam200409/Industrial-predictive-maintenance
 
+
+---
+
+## 🖥️ Dashboard Preview
+
+### Overview
+
+![Dashboard Overview](docs/screenshots/overview.png)
+
+### Predict Machine
+
+![Machine Prediction](docs/screenshots/predict-machine.png)
+
+### Engine Monitor
+
+![Engine Monitor](docs/screenshots/engine-monitor.png)
+
+### Maintenance Center
+
+![Maintenance Center](docs/screenshots/maintenance-center.png)
+
+### Model Intelligence
+
+![Model Intelligence](docs/screenshots/model-intelligence.png)
+
 ---
 
 ## 🎯 Project Objective
@@ -76,4 +101,3 @@ NASA C-MAPSS Sensor Data
           │
           ▼
     Streamlit Dashboard
-    
